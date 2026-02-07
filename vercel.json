@@ -2,12 +2,10 @@
   "version": 2,
   "cleanUrls": true,
   "trailingSlash": false,
-  "rewrites": [
-    { "source": "/frota", "destination": "/frota/index.html" },
-    { "source": "/manutencao", "destination": "/manutencao/index.html" },
-    { "source": "/subsidio", "destination": "/subsidio/index.html" },
-    { "source": "/frota/(.*)", "destination": "/frota/$1" },
-    { "source": "/manutencao/(.*)", "destination": "/manutencao/$1" },
-    { "source": "/subsidio/(.*)", "destination": "/subsidio/$1" }
+  "routes": [
+    { "src": "/frota", "dest": "/frota/index.html" },
+    { "src": "/manutencao", "dest": "/manutencao/index.html" },
+    { "src": "/subsidio", "dest": "/subsidio/index.html" },
+    { "handle": "filesystem" }
   ]
 }
