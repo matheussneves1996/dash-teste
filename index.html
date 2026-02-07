@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>Portal Operacional</title>
+    <style>
+        body { background: #000; color: #fff; font-family: sans-serif; text-align: center; padding: 50px; }
+        .container { max-width: 800px; margin: auto; }
+        .grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px; margin-top: 50px; }
+        .card { border: 1px solid #333; padding: 30px; border-radius: 10px; text-decoration: none; color: #fff; background: #111; transition: 0.3s; }
+        .card:hover { border-color: #f97316; background: #1a1a1a; }
+        h1 { font-style: italic; text-transform: uppercase; letter-spacing: -1px; }
+        span { color: #f97316; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Sistema <span>Operacional</span></h1>
+        <div class="grid">
+            <a href="/frota" class="card"><h3>Frota</h3></a>
+            <a href="/manutencao" class="card"><h3>Manutenção</h3></a>
+            <a href="/subsidio" class="card"><h3>Subsídio</h3></a>
+        </div>
+    </div>
+</body>
+</html>
