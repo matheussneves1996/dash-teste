@@ -4,59 +4,108 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Portal Operacional</title>
-    <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        /* CSS de Segurança caso o Tailwind falhe */
-        body { background-color: #000 !important; color: #fff !important; margin: 0; font-family: sans-serif; }
-        .grid-container {
+        /* CSS TOTALMENTE EMBUTIDO - NÃO DEPENDE DE NADA EXTERNO */
+        body {
+            background-color: #000;
+            color: #fff;
+            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 40px 20px;
+        }
+        header {
+            width: 100%;
+            max-width: 1000px;
+            border-bottom: 1px solid #333;
+            padding-bottom: 30px;
+            margin-bottom: 50px;
+        }
+        h1 {
+            font-size: 2.5rem;
+            font-weight: 900;
+            text-transform: uppercase;
+            font-style: italic;
+            margin: 0;
+            letter-spacing: -2px;
+        }
+        h1 span { color: #f97316; }
+        p.subtitle {
+            color: #666;
+            font-size: 0.7rem;
+            letter-spacing: 5px;
+            text-transform: uppercase;
+            margin-top: 5px;
+        }
+        main {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
             gap: 20px;
-            max-width: 1100px;
-            margin: 0 auto;
+            width: 100%;
+            max-width: 1000px;
         }
-        .nav-card {
-            border: 1px solid #27272a;
-            background: #09090b;
+        .card {
+            background: #111;
+            border: 1px solid #222;
             padding: 40px;
-            border-radius: 8px;
+            border-radius: 12px;
             text-decoration: none;
-            color: white;
-            transition: 0.3s;
+            color: #fff;
+            transition: all 0.3s ease;
         }
-        .nav-card:hover { border-color: #f97316; }
-        .text-orange { color: #f97316; }
+        .card:hover {
+            border-color: #f97316;
+            transform: translateY(-5px);
+            box-shadow: 0 10px 30px rgba(249, 115, 22, 0.1);
+        }
+        .card h2 {
+            margin: 0 0 10px 0;
+            font-size: 1.5rem;
+            text-transform: uppercase;
+        }
+        .card p {
+            color: #888;
+            font-size: 0.9rem;
+            margin: 0 0 25px 0;
+            line-height: 1.4;
+        }
+        .card .btn {
+            color: #f97316;
+            font-weight: bold;
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            border-bottom: 2px solid #f97316;
+            padding-bottom: 2px;
+        }
     </style>
 </head>
-<body class="bg-black text-white min-h-screen p-10">
+<body>
 
-    <header class="w-full max-w-5xl mx-auto border-b border-zinc-800 pb-10 mb-16">
-        <h1 class="text-4xl font-black uppercase tracking-tighter italic">
-            SISTEMA <span class="text-orange-500">OPERACIONAL</span>
-        </h1>
-        <p class="text-zinc-500 text-xs tracking-widest mt-2 uppercase font-bold">Gestão Centralizada de Transportes</p>
+    <header>
+        <h1>SISTEMA <span>OPERACIONAL</span></h1>
+        <p class="subtitle">Gestão Integrada de Transportes</p>
     </header>
 
-    <main class="grid-container">
-        
-        <a href="/frota" class="nav-card group">
-            <h2 class="text-2xl font-bold uppercase tracking-tight mb-2">Frota</h2>
-            <p class="text-zinc-500 text-sm">Dados técnicos e análise de veículos.</p>
-            <span class="inline-block mt-8 text-orange-500 font-bold text-xs uppercase underline">Acessar →</span>
+    <main>
+        <a href="/frota" class="card">
+            <h2>Frota</h2>
+            <p>Análise técnica e características dos veículos da empresa.</p>
+            <span class="btn">Acessar Painel</span>
         </a>
 
-        <a href="/manutencao" class="nav-card group">
-            <h2 class="text-2xl font-bold uppercase tracking-tight mb-2">Manutenção</h2>
-            <p class="text-zinc-500 text-sm">Ocorrências e logs operacionais.</p>
-            <span class="inline-block mt-8 text-orange-500 font-bold text-xs uppercase underline">Acessar →</span>
+        <a href="/manutencao" class="card">
+            <h2>Manutenção</h2>
+            <p>Controle de ocorrências, sinistros e horários perdidos.</p>
+            <span class="btn">Acessar Painel</span>
         </a>
 
-        <a href="/subsidio" class="nav-card group">
-            <h2 class="text-2xl font-bold uppercase tracking-tight mb-2">Subsídio</h2>
-            <p class="text-zinc-500 text-sm">Análise financeira e repasses.</p>
-            <span class="inline-block mt-8 text-orange-500 font-bold text-xs uppercase underline">Acessar →</span>
+        <a href="/subsidio" class="card">
+            <h2>Subsídio</h2>
+            <p>Dashboard financeiro de repasses e faturamento operacional.</p>
+            <span class="btn">Acessar Painel</span>
         </a>
-
     </main>
 
 </body>
