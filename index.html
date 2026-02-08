@@ -1,0 +1,1269 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gestão de Frota - Dashboard</title>
+    <meta name="description" content="Dashboard de gerenciamento de frota veicular, vendas e status operacional.">
+    
+    <!-- Favicon (Ícone de Ônibus) -->
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🚌</text></svg>">
+
+    <!-- 1. Tailwind CSS (Estilos) -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- 2. React e ReactDOM --> 
+    <script crossorigin src="https://unpkg.com/react@18.2.0/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18.2.0/umd/react-dom.production.min.js"></script>
+    
+    <!-- 3. Prop-Types (Dependência do Recharts) -->
+    <script src="https://unpkg.com/prop-types/prop-types.min.js"></script>
+
+    <!-- 4. Recharts (Gráficos) -->
+    <script src="https://unpkg.com/recharts@2.12.0/umd/Recharts.js"></script>
+
+    <!-- 5. Babel (Compilador para JSX no navegador) -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <!-- 6. FIREBASE SDK (Compatibilidade + AUTH + FIRESTORE) -->
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #f8fafc; }
+        /* Animação suave para o modal */
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        .modal-backdrop { animation: fadeIn 0.2s ease-out; }
+        /* Cursor pointer para gráficos interativos */
+        .recharts-sector, .recharts-rectangle { cursor: pointer; }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        // ==========================================
+        // CONFIGURAÇÃO DO FIREBASE (Produção)
+        // ==========================================
+        const firebaseConfig = {
+            apiKey: "AIzaSyBHJUaEgNk84LuUURMMwuzYn4n29eiW0DI", 
+            authDomain: "frota-sightseeing.firebaseapp.com",
+            projectId: "frota-sightseeing",
+            storageBucket: "frota-sightseeing.firebasestorage.app",
+            messagingSenderId: "795209583853",
+            appId: "1:795209583853:web:1335b32261f4cbadfb10e4",
+            measurementId: "G-WX61GMSBBC"
+        };
+
+        const isConfigured = firebaseConfig.apiKey && firebaseConfig.apiKey !== "SUA_API_KEY_AQUI";
+
+        // Coleção Oficial
+        const COLLECTION_NAME = "frota_veiculos_v2_premium";
+
+        let db = null;
+        let auth = null;
+
+        if (isConfigured && typeof firebase !== 'undefined') {
+            try {
+                if (!firebase.apps.length) {
+                    firebase.initializeApp(firebaseConfig);
+                }
+                db = firebase.firestore();
+                auth = firebase.auth(); 
+            } catch (err) {
+                console.error("Erro na inicialização do Firebase:", err);
+            }
+        }
+
+        // --- 1. CONFIGURAÇÃO INICIAL REACT ---
+        const { useState, useMemo, useEffect } = React;
+        
+        const { 
+            BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, 
+            PieChart, Pie, Cell, LabelList 
+        } = Recharts;
+
+        // --- 2. ÍCONES ---
+        const IconBase = ({ children, className, ...props }) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} {...props}>
+                {children}
+            </svg>
+        );
+
+        const Bus = (props) => <IconBase {...props}><path d="M8 6v6"/><path d="M15 6v6"/><path d="M2 12h19.6"/><path d="M18 18h3s.5-1.7.8-2.8c.1-.4.2-.8.2-1.2 0-.34-.02-.68-.05-1.02l-1.58-13c-.1-.8-.8-1.4-1.6-1.4H4.7c-.8 0-1.5.6-1.6 1.4l-1.58 13c-.03.34-.05.68-.05 1.02 0 .4.1.8.2 1.2.3 1.1.8 2.8.8 2.8h3"/><path d="M6.6 22h10.8"/><circle cx="5.8" cy="18" r="1.8"/><circle cx="17.8" cy="18" r="1.8"/></IconBase>;
+        const Activity = (props) => <IconBase {...props}><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></IconBase>;
+        const CreditCard = (props) => <IconBase {...props}><rect width="20" height="14" x="2" y="5" rx="2"/><line x1="2" x2="22" y1="10" y2="10"/></IconBase>;
+        const Search = (props) => <IconBase {...props}><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></IconBase>;
+        const Wrench = (props) => <IconBase {...props}><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></IconBase>;
+        const Hammer = (props) => <IconBase {...props}><path d="m15 12-8.5 8.5c-.83.83-2.17.83-3 0 0 0 0 0 0 0a2.12 2.12 0 0 1 0-3L12 9"/><path d="M17.64 15 22 10.64"/><path d="m20.91 11.7-1.25-1.25c-.6-.6-.93-1.4-.93-2.25V7c0-.55-.45-1-1-1H16.5c-.55 0-1 .45-1 1v1.2c0 .85-.33 1.65-.93 2.25L13.36 11.7"/><path d="m16 5-5-3-4 2 1.8 1.8"/></IconBase>;
+        const ArrowUpDown = (props) => <IconBase {...props}><path d="m21 16-4 4-4-4"/><path d="M17 20V4"/><path d="m3 8 4-4 4 4"/><path d="M7 4v16"/></IconBase>;
+        const ArrowUp = (props) => <IconBase {...props}><path d="m5 12 7-7 7 7"/><path d="M12 19V5"/></IconBase>;
+        const ArrowDown = (props) => <IconBase {...props}><path d="M12 5v14"/><path d="m19 12-7 7-7-7"/></IconBase>;
+        const XIcon = (props) => <IconBase {...props}><path d="M18 6 6 18"/><path d="m6 6 18 18"/></IconBase>;
+        const Calendar = (props) => <IconBase {...props}><rect width="18" height="18" x="3" y="4" rx="2" ry="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/></IconBase>;
+        const CheckCircle = (props) => <IconBase {...props}><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></IconBase>;
+        const ListIcon = (props) => <IconBase {...props}><line x1="8" x2="21" y1="6" y2="6"/><line x1="8" x2="21" y1="12" y2="12"/><line x1="8" x2="21" y1="18" y2="18"/><line x1="3" x2="3.01" y1="6" y2="6"/><line x1="3" x2="3.01" y1="12" y2="12"/><line x1="3" x2="3.01" y1="18" y2="18"/></IconBase>;
+        const AlertCircle = (props) => <IconBase {...props}><circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/></IconBase>;
+        const ArrowLeft = (props) => <IconBase {...props}><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></IconBase>;
+        const Edit = (props) => <IconBase {...props}><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></IconBase>;
+        const Save = (props) => <IconBase {...props}><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></IconBase>;
+        const FilterIcon = (props) => <IconBase {...props}><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></IconBase>;
+        const DollarSign = (props) => <IconBase {...props}><line x1="12" x2="12" y1="2" y2="22"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></IconBase>;
+        const MapPin = (props) => <IconBase {...props}><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></IconBase>;
+        const TypeIcon = (props) => <IconBase {...props}><polyline points="4 7 4 4 20 4 20 7"/><line x1="9" x2="15" y1="20" y2="20"/><line x1="12" x2="12" y1="4" y2="20"/></IconBase>;
+        const ShoppingCart = (props) => <IconBase {...props}><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></IconBase>;
+        const RotateCcw = (props) => <IconBase {...props}><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></IconBase>;
+        const AlertTriangle = (props) => <IconBase {...props}><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></IconBase>;
+
+        // --- 3. DADOS E VARIÁVEIS ---
+        
+        const STATUS_MAP = {
+            'P': 'Palmas',
+            'ETBL': 'Braso Lisboa',
+            'RTP': 'Recreio',
+            'A': 'Alugado',
+            'R': 'Rio'
+        };
+
+        const SAMPLE_DATA = ``; // Fallback vazio para produção
+
+        const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d', '#8884d8', '#82ca9d'];
+
+        // --- 4. FUNÇÕES DE LÓGICA ---
+
+        const normalizeText = (text) => {
+            if (!text) return '';
+            return text
+                .toString()
+                .normalize("NFD")
+                .replace(/[\u0300-\u036f]/g, "") 
+                .toUpperCase()
+                .trim();
+        };
+
+        const getStatusCategory = (situacaoRaw) => {
+            const s = normalizeText(situacaoRaw);
+            
+            if (s.includes('VENDIDO')) return 'VENDIDO';
+            if (s.includes('OPERACAO') || s.includes('RODANDO')) return 'OPERACAO';
+            if (s.includes('REFORMA') || s.includes('FUNILARIA') || s.includes('PINTURA')) return 'REFORMA';
+            if (s.includes('MANUT') || s.includes('OFICINA') || s.includes('REVISAO') || 
+                s.includes('MECANICA') || s.includes('CORRETIVA') || s.includes('PREVENTIVA') || 
+                s.includes('PARADO') || s.includes('GARAGEM') || s.includes('AVARIA') || s.includes('BRASO')) return 'MANUTENCAO';
+            if (s.includes('LIBERADO') || s.includes('DISPONIVEL') || s.includes('PRONTO')) return 'LIBERADO';
+            
+            return 'OUTROS';
+        };
+
+        const findKey = (sampleItem, variations) => {
+            if (!sampleItem) return null;
+            const keys = Object.keys(sampleItem);
+            
+            for (const v of variations) {
+                if (keys.includes(v)) return v;
+            }
+            
+            for (const v of variations) {
+                const found = keys.find(k => normalizeText(k).includes(normalizeText(v)));
+                if (found) return found;
+            }
+            
+            return null;
+        };
+
+        const parseCSV = (text) => {
+            const lines = text.trim().split('\n');
+            const data = [];
+            let headers = [];
+            let startParsing = false;
+
+            for (let i = 0; i < lines.length; i++) {
+                const line = lines[i].trim();
+                if (!line) continue;
+
+                if ((line.toUpperCase().includes('STATUS') || line.toUpperCase().includes('SITUA')) && 
+                    (line.toUpperCase().includes('PLACA') || line.toUpperCase().includes('PREFIXO'))) {
+                    headers = line.split(';').map(h => h.trim());
+                    startParsing = true;
+                    continue;
+                }
+
+                if (startParsing) {
+                    const values = line.split(';');
+                    if (values.length >= Math.max(2, headers.length - 10)) {
+                        const entry = {};
+                        headers.forEach((header, index) => {
+                            if (header) {
+                                entry[header] = values[index] ? values[index].trim() : '';
+                            }
+                        });
+                        data.push(entry);
+                    }
+                }
+            }
+            return data;
+        };
+
+        const formatCurrency = (value) => {
+            if (!value) return '';
+            const num = parseFloat(value);
+            if (isNaN(num)) return value;
+            return num.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+        };
+
+        // --- 5. COMPONENTES VISUAIS ---
+
+        const Card = ({ title, value, icon: Icon, subtext, color = "blue", compact = false, featured = false, onClick, clickable = false }) => {
+            const colorClasses = {
+                blue: "bg-blue-50 text-blue-600",
+                emerald: "bg-emerald-50 text-emerald-600",
+                amber: "bg-amber-50 text-amber-600",
+                purple: "bg-purple-50 text-purple-600",
+                slate: "bg-slate-100 text-slate-600",
+                red: "bg-red-50 text-red-600",
+            };
+            
+            const clickClass = clickable ? "cursor-pointer hover:ring-2 hover:ring-blue-400 transform hover:-translate-y-1 transition-all" : "";
+
+            if (featured) {
+                return (
+                    <div 
+                        onClick={onClick}
+                        className={`bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl shadow-lg p-6 md:p-8 border border-slate-700 flex flex-col md:flex-row items-start md:items-center justify-between hover:shadow-xl transition-all h-full relative overflow-hidden group ${clickClass}`}
+                    >
+                        <div className="absolute top-0 right-0 p-8 opacity-5 transform translate-x-4 -translate-y-4 group-hover:scale-110 transition-transform duration-500">
+                           <Icon className="w-48 h-48 text-white" />
+                        </div>
+                        <div className="relative z-10">
+                            <div className="flex items-center gap-3 mb-2">
+                                <div className="p-2 bg-white/10 rounded-lg backdrop-blur-sm">
+                                    <Icon className="w-6 h-6 text-blue-300" />
+                                </div>
+                                <p className="text-sm font-semibold text-blue-200 uppercase tracking-wider">{title}</p>
+                            </div>
+                            <h3 className="text-5xl md:text-6xl font-bold text-white tracking-tight">{value}</h3>
+                            {subtext && <p className="text-slate-400 mt-2 font-light">{subtext}</p>}
+                        </div>
+                        
+                        <div className="hidden md:block relative z-10 bg-white/5 p-4 rounded-xl backdrop-blur-sm border border-white/10">
+                           <div className="text-xs text-slate-300 mb-1">Status da Base</div>
+                           <div className="flex items-center gap-2">
+                              <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></div>
+                              <span className="text-white font-medium">Online</span>
+                           </div>
+                        </div>
+                    </div>
+                );
+            }
+
+            if (compact) {
+                return (
+                    <div 
+                        onClick={onClick}
+                        className={`bg-white rounded-xl shadow-sm p-5 border border-slate-100 flex items-center justify-between hover:shadow-md transition-all ${clickClass}`}
+                    >
+                        <div>
+                            <p className="text-sm font-medium text-slate-500 mb-1">{title}</p>
+                            <h3 className="text-3xl font-bold text-slate-800">{value}</h3>
+                        </div>
+                        <div className={`p-3 rounded-xl ${colorClasses[color] || colorClasses.blue}`}>
+                            <Icon className="w-6 h-6" />
+                        </div>
+                    </div>
+                );
+            }
+
+            return (
+                <div 
+                    onClick={onClick}
+                    className={`bg-white rounded-xl shadow-sm p-6 border border-slate-100 flex items-start justify-between hover:shadow-md transition-shadow h-full ${clickClass}`}
+                >
+                    <div>
+                        <p className="text-sm font-medium text-slate-500 mb-1">{title}</p>
+                        <h3 className="text-3xl font-bold text-slate-800">{value}</h3>
+                        {subtext && <p className="text-xs text-slate-400 mt-2">{subtext}</p>}
+                    </div>
+                    <div className={`p-3 rounded-lg ${colorClasses[color] || colorClasses.blue}`}>
+                        <Icon className="w-6 h-6" />
+                    </div>
+                </div>
+            );
+        };
+
+        const EditModal = ({ bus, currentSituacao, currentStatus, currentNovoPrefixo, onClose, onSave, situacaoOptions, statusOptions }) => {
+            const [localSituacao, setLocalSituacao] = useState(currentSituacao);
+            const [localStatus, setLocalStatus] = useState(currentStatus);
+            const [localNovoPrefixo, setLocalNovoPrefixo] = useState(currentNovoPrefixo || '');
+
+            const defaultSituacaoOptions = [
+                "EM OPERAÇAO", 
+                "LIBERADO", 
+                "EM MANUTENÇÃO", 
+                "OFICINA MECANICA", 
+                "REFORMAR", 
+                "FUNILARIA",
+                "PARADO",
+                "PRONTO",
+                "BRASO",
+                "VENDIDO"
+            ];
+            const defaultStatusOptions = ["RTP", "ETBL", "A", "P", "R"];
+
+            const allSituacaoOptions = [...new Set([...(situacaoOptions || []), ...defaultSituacaoOptions])].sort();
+            const allStatusOptions = [...new Set([...(statusOptions || []), ...defaultStatusOptions])].sort();
+
+            return (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 modal-backdrop backdrop-blur-sm p-4">
+                    <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden transform transition-all scale-100">
+                        <div className="bg-slate-50 px-6 py-4 border-b border-slate-100 flex justify-between items-center">
+                            <h3 className="font-bold text-lg text-slate-800 flex items-center gap-2">
+                                <Edit className="w-5 h-5 text-blue-600" />
+                                Editar Veículo
+                            </h3>
+                            <button onClick={onClose} className="text-slate-400 hover:text-slate-600 transition-colors">
+                                <XIcon className="w-5 h-5" />
+                            </button>
+                        </div>
+                        
+                        <div className="p-6">
+                            <div className="mb-6 bg-blue-50 p-4 rounded-lg border border-blue-100">
+                                <div className="flex justify-between items-center mb-1">
+                                    <span className="text-xs font-semibold text-blue-600 uppercase">Veículo</span>
+                                    <span className="text-xs font-bold text-slate-700 bg-white px-2 py-0.5 rounded border border-blue-100">{bus.PREFIXO || ''}</span>
+                                </div>
+                                <div className="text-sm text-slate-600">
+                                    Placa: <span className="font-medium text-slate-900">{bus.PLACA || ''}</span>
+                                </div>
+                            </div>
+
+                            <div className="space-y-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-slate-700 mb-1">Novo Prefixo (Equivalência)</label>
+                                    <input 
+                                        type="text" 
+                                        className="block w-full px-3 py-2.5 text-base border-slate-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-lg border bg-white shadow-sm transition-shadow placeholder-slate-400"
+                                        placeholder="Digite o novo prefixo..."
+                                        value={localNovoPrefixo}
+                                        onChange={(e) => setLocalNovoPrefixo(e.target.value)}
+                                    />
+                                    <p className="text-xs text-slate-500 mt-1">Preencha se o prefixo mudou na nova empresa.</p>
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-medium text-slate-700 mb-1">Status</label>
+                                    <select 
+                                        className="block w-full pl-3 pr-10 py-2.5 text-base border-slate-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-lg border bg-white shadow-sm transition-shadow"
+                                        value={localStatus}
+                                        onChange={(e) => setLocalStatus(e.target.value)}
+                                    >
+                                        <option value="">Selecione...</option>
+                                        {allStatusOptions.map(opt => (
+                                            <option key={opt} value={opt}>{STATUS_MAP[opt] || opt}</option>
+                                        ))}
+                                    </select>
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-medium text-slate-700 mb-1">Situação</label>
+                                    <select 
+                                        className="block w-full pl-3 pr-10 py-2.5 text-base border-slate-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-lg border bg-white shadow-sm transition-shadow"
+                                        value={localSituacao}
+                                        onChange={(e) => setLocalSituacao(e.target.value)}
+                                    >
+                                        <option value="">Selecione...</option>
+                                        {allSituacaoOptions.map(opt => (
+                                            <option key={opt} value={opt}>{opt}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="px-6 py-4 bg-slate-50 flex justify-end gap-3 border-t border-slate-100">
+                            <button 
+                                onClick={onClose}
+                                className="px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-slate-500 transition-colors"
+                            >
+                                Cancelar
+                            </button>
+                            <button 
+                                onClick={() => onSave(localSituacao, localStatus, localNovoPrefixo)}
+                                className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 flex items-center gap-2 transition-colors shadow-sm"
+                            >
+                                <Save className="w-4 h-4" />
+                                Salvar Alterações
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const SalesModal = ({ bus, onClose, onConfirm }) => {
+            const [comprador, setComprador] = useState('');
+            const [valor, setValor] = useState('');
+
+            const handleSubmit = () => {
+                if (!comprador || !valor) {
+                    alert("Por favor, preencha todos os campos.");
+                    return;
+                }
+                onConfirm(bus, comprador, valor);
+            };
+
+            return (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 modal-backdrop backdrop-blur-sm p-4">
+                    <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden transform transition-all scale-100">
+                        <div className="bg-emerald-50 px-6 py-4 border-b border-emerald-100 flex justify-between items-center">
+                            <h3 className="font-bold text-lg text-emerald-800 flex items-center gap-2">
+                                <DollarSign className="w-5 h-5" />
+                                Vender Veículo
+                            </h3>
+                            <button onClick={onClose} className="text-emerald-400 hover:text-emerald-600 transition-colors">
+                                <XIcon className="w-5 h-5" />
+                            </button>
+                        </div>
+                        
+                        <div className="p-6">
+                            <div className="mb-6 bg-emerald-50/50 p-4 rounded-lg border border-emerald-100">
+                                <p className="text-sm text-emerald-800 font-medium text-center">
+                                    Você está registrando a venda do veículo <br/>
+                                    <span className="font-bold text-lg">{bus.PREFIXO} ({bus.PLACA})</span>
+                                </p>
+                                <p className="text-xs text-emerald-600 text-center mt-1">Ele será removido da frota ativa.</p>
+                            </div>
+
+                            <div className="space-y-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-slate-700 mb-1">Nome do Comprador / Empresa</label>
+                                    <input 
+                                        type="text" 
+                                        className="block w-full px-3 py-2.5 text-base border-slate-300 focus:outline-none focus:ring-emerald-500 focus:border-emerald-500 sm:text-sm rounded-lg border bg-white shadow-sm transition-shadow"
+                                        placeholder="Ex: João da Silva Transportes"
+                                        value={comprador}
+                                        onChange={(e) => setComprador(e.target.value)}
+                                    />
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-medium text-slate-700 mb-1">Valor da Venda (R$)</label>
+                                    <input 
+                                        type="number" 
+                                        className="block w-full px-3 py-2.5 text-base border-slate-300 focus:outline-none focus:ring-emerald-500 focus:border-emerald-500 sm:text-sm rounded-lg border bg-white shadow-sm transition-shadow"
+                                        placeholder="Ex: 85000.00"
+                                        value={valor}
+                                        onChange={(e) => setValor(e.target.value)}
+                                    />
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="px-6 py-4 bg-slate-50 flex justify-end gap-3 border-t border-slate-100">
+                            <button 
+                                onClick={onClose}
+                                className="px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors"
+                            >
+                                Cancelar
+                            </button>
+                            <button 
+                                onClick={handleSubmit}
+                                className="px-4 py-2 text-sm font-medium text-white bg-emerald-600 border border-transparent rounded-lg hover:bg-emerald-700 shadow-sm transition-colors flex items-center gap-2"
+                            >
+                                <CheckCircle className="w-4 h-4" />
+                                Confirmar Venda
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const App = () => {
+            const [fleetData, setFleetData] = useState([]);
+            const [view, setView] = useState('dashboard');
+            const [searchTerm, setSearchTerm] = useState('');
+            const [isLoading, setIsLoading] = useState(true);
+            const [demoMode, setDemoMode] = useState(false);
+            const [firebaseError, setFirebaseError] = useState(null); 
+            const [user, setUser] = useState(null); 
+            const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' });
+            
+            const [filters, setFilters] = useState({
+                status: '',
+                situacao: '',
+                banco: '',
+                category: '',
+                ano: ''
+            });
+
+            const [editingVehicle, setEditingVehicle] = useState(null);
+            const [sellingVehicle, setSellingVehicle] = useState(null);
+
+            // --- Lógica Principal de Carregamento ---
+            useEffect(() => {
+                const loadMockData = () => {
+                    setDemoMode(true);
+                    setFleetData(parseCSV(SAMPLE_DATA).map((d, i) => ({...d, firestoreId: `local-${i}`})));
+                    setIsLoading(false);
+                };
+
+                // Safety timeout: Se o Firebase demorar mais de 5s, liberta o ecrã
+                const safetyTimeout = setTimeout(() => {
+                    if (isLoading) {
+                        console.warn("Timeout de carregamento atingido.");
+                        setIsLoading(false); 
+                    }
+                }, 5000);
+
+                if (!isConfigured) {
+                    setFirebaseError("API Key não configurada. Substitua 'SUA_API_KEY_AQUI' no código.");
+                    loadMockData();
+                    return () => clearTimeout(safetyTimeout);
+                }
+
+                if (!db || !auth) {
+                    setFirebaseError("Falha ao inicializar o Firestore ou Auth.");
+                    loadMockData();
+                    return () => clearTimeout(safetyTimeout);
+                }
+
+                // FUNÇÃO PRINCIPAL: Autenticar e depois Conectar
+                const connectToFirebase = async () => {
+                    try {
+                        if (!auth.currentUser) {
+                            console.log("Tentando login anônimo...");
+                            await auth.signInAnonymously();
+                        }
+                        
+                        setUser(auth.currentUser);
+                        console.log("Usuário autenticado:", auth.currentUser.uid);
+
+                        const unsubscribe = db.collection(COLLECTION_NAME).onSnapshot((snapshot) => {
+                            const vehicles = snapshot.docs.map(doc => ({
+                                firestoreId: doc.id,
+                                ...doc.data()
+                            }));
+
+                            setFirebaseError(null);
+                            setFleetData(vehicles);
+                            setIsLoading(false);
+
+                        }, (error) => {
+                            console.error("Erro Firestore:", error);
+                            if (error.code === 'permission-denied') {
+                                setFirebaseError("Permissão Negada: O usuário não tem acesso. Verifique as 'Regras' do Firebase.");
+                            } else if (error.code === 'unavailable') {
+                                setFirebaseError("Offline: Verifique sua conexão com a internet.");
+                            } else {
+                                setFirebaseError(`Erro de Conexão: ${error.message} (${error.code})`);
+                            }
+                            loadMockData();
+                            setIsLoading(false);
+                        });
+
+                        return unsubscribe;
+
+                    } catch (authErr) {
+                        console.error("Erro de Autenticação:", authErr);
+                        setFirebaseError(`Falha ao Autenticar: ${authErr.message}`);
+                        loadMockData();
+                        setIsLoading(false);
+                    }
+                };
+
+                let unsubscribeFn;
+                connectToFirebase().then(fn => { unsubscribeFn = fn; });
+
+                return () => {
+                    clearTimeout(safetyTimeout);
+                    if (unsubscribeFn) unsubscribeFn();
+                };
+            }, []);
+
+            const keys = useMemo(() => {
+                const sample = fleetData[0] || {};
+                return {
+                    ANO: findKey(sample, ['ANO/MOD', 'ANO', 'ANO FAB', 'FABRICAÇÃO']) || 'ANO',
+                    SITUACAO: findKey(sample, ['SITUAÇÃO', 'SITUACAO', 'SIT', 'ESTADO', 'CONDIÇÃO']) || 'SITUAÇÃO',
+                    STATUS: findKey(sample, ['STATUS', 'ESTADO']) || 'Status',
+                    BANCO: findKey(sample, ['BANCO', 'FINANCIADOR']) || 'BANCO',
+                    PLACA: findKey(sample, ['PLACA', 'LICENSE']) || 'PLACA',
+                    PREFIXO: findKey(sample, ['PREFIXO', 'NUMERO']) || 'PREFIXO',
+                    MODELO: findKey(sample, ['CARROCERIA', 'MODELO']) || 'CARROCERIA',
+                    CHASSI: findKey(sample, ['MOD. CHASSI', 'CHASSI']) || 'MOD. CHASSI',
+                    FORNECEDORA: findKey(sample, ['FORNECEDORA', 'FORNECEDORA', 'ORIGEM', 'FORN']) || 'FORNECEDORA',
+                    RENAVAM: findKey(sample, ['RENAVAM', 'REN']) || 'RENAVAM',
+                    NOVO_PREFIXO: 'NOVO_PREFIXO',
+                    IS_SOLD: 'isSold',
+                    BUYER: 'comprador',
+                    PRICE: 'valor_venda',
+                    SALE_DATE: 'data_venda'
+                };
+            }, [fleetData]);
+
+            // --- Ações de Escrita ---
+
+            const handleSaveEdit = async (newSituacao, newStatus, newNovoPrefixo) => {
+                if (!editingVehicle) return;
+
+                const updates = {
+                    [keys.SITUACAO]: newSituacao,
+                    [keys.STATUS]: newStatus,
+                    [keys.NOVO_PREFIXO]: newNovoPrefixo
+                };
+
+                if (demoMode) {
+                    const newData = fleetData.map(v => 
+                        v.firestoreId === editingVehicle.firestoreId ? { ...v, ...updates } : v
+                    );
+                    setFleetData(newData);
+                } else {
+                    try {
+                        Object.keys(updates).forEach(key => updates[key] === undefined && delete updates[key]);
+                        await db.collection(COLLECTION_NAME).doc(editingVehicle.firestoreId).update(updates);
+                    } catch (e) {
+                        alert("Erro ao salvar: " + e.message);
+                    }
+                }
+                
+                setEditingVehicle(null);
+            };
+
+            const handleConfirmSale = async (vehicle, buyer, price) => {
+                const updates = {
+                    [keys.IS_SOLD]: true,
+                    [keys.SITUACAO]: 'VENDIDO',
+                    [keys.BUYER]: buyer,
+                    [keys.PRICE]: parseFloat(price),
+                    [keys.SALE_DATE]: new Date().toLocaleDateString('pt-BR')
+                };
+
+                if (demoMode) {
+                    const newData = fleetData.map(v => 
+                        v.firestoreId === vehicle.firestoreId ? { ...v, ...updates } : v
+                    );
+                    setFleetData(newData);
+                } else {
+                    try {
+                        await db.collection(COLLECTION_NAME).doc(vehicle.firestoreId).update(updates);
+                    } catch (e) {
+                        alert("Erro ao vender: " + e.message);
+                    }
+                }
+                setSellingVehicle(null);
+            };
+
+            const handleCancelSale = async (vehicle) => {
+                if(confirm(`Tem certeza que deseja cancelar a venda do veículo ${vehicle[keys.PREFIXO]} e retorná-lo para a frota?`)) {
+                    const updates = {
+                        [keys.IS_SOLD]: false,
+                        [keys.SITUACAO]: 'DISPONIVEL',
+                        [keys.BUYER]: null,
+                        [keys.PRICE]: null,
+                        [keys.SALE_DATE]: null
+                    };
+
+                    if (demoMode) {
+                        const newData = fleetData.map(v => 
+                            v.firestoreId === vehicle.firestoreId ? { ...v, ...updates } : v
+                        );
+                        setFleetData(newData);
+                    } else {
+                        try {
+                            await db.collection(COLLECTION_NAME).doc(vehicle.firestoreId).update(updates);
+                        } catch (e) {
+                            alert("Erro ao cancelar venda: " + e.message);
+                        }
+                    }
+                }
+            };
+
+            // --- Handlers de UI ---
+            const handleEditClick = (vehicle) => setEditingVehicle(vehicle);
+            const handleSellClick = (vehicle) => setSellingVehicle(vehicle);
+            const handleCardClick = (category) => handleChartClick('category', category); 
+            const handleYearClick = (year) => setFilters(prev => ({ ...prev, ano: prev.ano === year ? '' : year }));
+            
+            const handleChartClick = (type, value) => {
+                setFilters(prev => ({ ...prev, [type]: prev[type] === value ? '' : value }));
+            };
+
+            const clearFilters = () => {
+                setFilters({ status: '', situacao: '', banco: '', category: '', ano: '' });
+                setSearchTerm('');
+            };
+
+            const requestSort = (key) => {
+                let direction = 'asc';
+                if (sortConfig.key === key && sortConfig.direction === 'asc') direction = 'desc';
+                setSortConfig({ key, direction });
+            };
+
+            // --- Filtragem e Dados Derivados ---
+            const filteredData = useMemo(() => {
+                let data = fleetData.filter(item => !item[keys.IS_SOLD]);
+
+                if (filters.status) data = data.filter(item => item[keys.STATUS] === filters.status);
+                
+                if (filters.situacao) {
+                    data = data.filter(item => {
+                        const rawSit = item[keys.SITUACAO] || '';
+                        if (filters.situacao === 'ALUGADOS') return normalizeText(rawSit).startsWith('A.');
+                        return rawSit === filters.situacao;
+                    });
+                }
+
+                if (filters.banco) data = data.filter(item => item[keys.BANCO] === filters.banco);
+                if (filters.category) data = data.filter(item => getStatusCategory(item[keys.SITUACAO]) === filters.category);
+                
+                if (filters.ano) {
+                    data = data.filter(item => {
+                         let val = item[keys.ANO];
+                         if (val) val = val.toString().trim();
+                         if (!val || val === '') val = 'N/D';
+                         return val === filters.ano;
+                    });
+                }
+
+                if (searchTerm) {
+                    data = data.filter(bus => 
+                        Object.values(bus).some(val => 
+                            String(val).toLowerCase().includes(searchTerm.toLowerCase())
+                        )
+                    );
+                }
+                return data;
+            }, [fleetData, filters, searchTerm, keys]);
+
+            const soldData = useMemo(() => fleetData.filter(item => item[keys.IS_SOLD]), [fleetData, keys]);
+
+            // --- Métricas ---
+            const metrics = useMemo(() => {
+                const dataToUse = filteredData; 
+                const total = dataToUse.length;
+                
+                const situacaoCount = {};
+                const statusCount = {};
+                const bancoCount = {};
+                const fornecedoraCount = {};
+                const chassiCount = {};
+                const anoCount = {};
+                
+                let operacionais = 0;
+                let liberados = 0; 
+                let emManutencao = 0;
+                let emReforma = 0;
+                let vendidos = 0;
+                
+                const statusCountsByCode = { 'RTP': 0, 'ETBL': 0, 'P': 0, 'A': 0, 'R': 0 };
+
+                dataToUse.forEach(bus => {
+                    const sitRaw = bus[keys.SITUACAO] || '';
+                    let sitDisplay = sitRaw;
+                    if (normalizeText(sitRaw).startsWith('A.')) sitDisplay = 'ALUGADOS';
+
+                    const category = getStatusCategory(sitRaw);
+
+                    let ano = bus[keys.ANO];
+                    if (ano) ano = ano.toString().trim();
+                    if (!ano || ano === '') ano = 'N/D';
+
+                    situacaoCount[sitDisplay] = (situacaoCount[sitDisplay] || 0) + 1;
+                    anoCount[ano] = (anoCount[ano] || 0) + 1;
+                    
+                    const rawStatus = bus[keys.STATUS] || 'Outros';
+                    const statusLabel = STATUS_MAP[rawStatus] || rawStatus;
+                    statusCount[statusLabel] = (statusCount[statusLabel] || 0) + 1;
+                    
+                    if (statusCountsByCode.hasOwnProperty(rawStatus)) statusCountsByCode[rawStatus]++;
+
+                    const banco = bus[keys.BANCO] || 'Outros';
+                    bancoCount[banco] = (bancoCount[banco] || 0) + 1;
+
+                    const forn = bus[keys.FORNECEDORA] || 'Outros';
+                    fornecedoraCount[forn] = (fornecedoraCount[forn] || 0) + 1;
+
+                    const chassi = bus[keys.CHASSI] || 'Outros';
+                    chassiCount[chassi] = (chassiCount[chassi] || 0) + 1;
+
+                    if (category === 'OPERACAO') operacionais++;
+                    else if (category === 'REFORMA') emReforma++;
+                    else if (category === 'MANUTENCAO') emManutencao++;
+                    else if (category === 'LIBERADO') liberados++;
+                    else if (category === 'VENDIDO') vendidos++;
+                });
+
+                const formatForChart = (obj) => Object.entries(obj)
+                    .map(([name, value]) => ({ name, value }))
+                    .sort((a, b) => b.value - a.value);
+
+                const formatYears = (obj) => Object.entries(obj)
+                    .map(([name, value]) => ({ name, value }))
+                    .sort((a, b) => {
+                        const yearA = parseInt(a.name) || 0;
+                        const yearB = parseInt(b.name) || 0;
+                        if (yearA > 0 && yearB > 0) return yearB - yearA;
+                        return b.name.localeCompare(a.name);
+                    });
+
+                return {
+                    total, operacionais, liberados, emManutencao, emReforma, vendidos, statusCountsByCode, 
+                    situacaoChart: formatForChart(situacaoCount),
+                    statusChart: formatForChart(statusCount),
+                    bancoChart: formatForChart(bancoCount),
+                    fornecedoraChart: formatForChart(fornecedoraCount),
+                    chassiChart: formatForChart(chassiCount),
+                    anosList: formatYears(anoCount)
+                };
+            }, [filteredData, keys]); 
+
+            const uniqueValues = useMemo(() => {
+                const getUnique = (key) => [...new Set(fleetData.map(item => item[key]).filter(Boolean))].sort();
+                return {
+                    status: getUnique(keys.STATUS),
+                    situacao: getUnique(keys.SITUACAO),
+                    banco: getUnique(keys.BANCO)
+                };
+            }, [fleetData, keys]);
+
+            const processedData = useMemo(() => {
+                let data = [...filteredData]; 
+                if (sortConfig.key) {
+                    data.sort((a, b) => {
+                        const valA = a[sortConfig.key] || '';
+                        const valB = b[sortConfig.key] || '';
+                        if (sortConfig.key === keys.ANO) {
+                            const numA = parseInt(valA) || 0;
+                            const numB = parseInt(valB) || 0;
+                            if (numA !== numB) return sortConfig.direction === 'asc' ? numA - numB : numB - numA;
+                        }
+                        if (valA < valB) return sortConfig.direction === 'asc' ? -1 : 1;
+                        if (valA > valB) return sortConfig.direction === 'asc' ? 1 : -1;
+                        return 0;
+                    });
+                }
+                return data;
+            }, [filteredData, sortConfig, keys]);
+
+            const SortableHeader = ({ label, sortKey }) => (
+                <th className="px-6 py-4 cursor-pointer hover:bg-slate-100 transition-colors group select-none whitespace-nowrap" onClick={() => requestSort(sortKey)}>
+                    <div className="flex items-center gap-2">
+                        {label}
+                        {sortConfig.key === sortKey ? (
+                            sortConfig.direction === 'asc' ? <ArrowUp className="w-4 h-4 text-blue-600" /> : <ArrowDown className="w-4 h-4 text-blue-600" />
+                        ) : (
+                            <ArrowUpDown className="w-4 h-4 text-slate-300 opacity-0 group-hover:opacity-100 transition-opacity" />
+                        )}
+                    </div>
+                </th>
+            );
+
+            const activeFiltersCount = Object.values(filters).filter(Boolean).length;
+            const FilterBadge = ({ label, value, onClear }) => (
+                <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800 border border-blue-200">
+                    {label}: {value}
+                    <button onClick={onClear} className="hover:text-blue-900"><XIcon className="w-3 h-3" /></button>
+                </span>
+            );
+
+            return (
+                <div className="min-h-screen bg-slate-50 font-sans text-slate-800 p-4 md:p-6 pb-20">
+                    {/* Banner de Erro Firebase (Diagnóstico) */}
+                    {firebaseError && (
+                        <div className="mb-4 bg-red-50 border border-red-200 rounded-lg p-4 text-sm text-red-800 flex items-start gap-3 shadow-sm animate-in slide-in-from-top-2">
+                            <AlertTriangle className="w-5 h-5 flex-shrink-0 mt-0.5 text-red-600" />
+                            <div>
+                                <h4 className="font-bold mb-1">Erro de Conexão com o Banco de Dados</h4>
+                                <p>{firebaseError}</p>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Banner Modo Demo */}
+                    {demoMode && !firebaseError && (
+                        <div className="mb-4 bg-yellow-50 border border-yellow-200 rounded-lg p-3 text-sm text-yellow-800 flex items-center gap-2 animate-in slide-in-from-top-2">
+                            <AlertCircle className="w-5 h-5 flex-shrink-0" />
+                            <span>
+                                <strong>Modo Demonstração (Vazio):</strong> Conecte ao Firebase para ver dados reais.
+                            </span>
+                        </div>
+                    )}
+
+                    <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
+                        <div>
+                            <h1 className="text-3xl font-bold text-slate-900">Gestão de Frota</h1>
+                            <div className="flex items-center gap-2 text-slate-500 mt-1">
+                                <span className={`w-2 h-2 rounded-full ${firebaseError ? 'bg-red-500' : demoMode ? 'bg-yellow-500' : 'bg-emerald-500'} animate-pulse`}></span>
+                                <span className="text-sm font-medium">
+                                    {isLoading ? 'Carregando...' : firebaseError ? 'Erro de Conexão' : demoMode ? 'Dados Locais (Vazio)' : user ? 'Conectado (Autenticado)' : 'Conectado'}
+                                </span>
+                            </div>
+                        </div>
+                        
+                        <div className="flex flex-col md:flex-row items-center gap-3">
+                            {view === 'dashboard' && (
+                                <button onClick={() => setView('list')} className="w-full md:w-auto flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors shadow-sm font-medium text-sm">
+                                    <ListIcon className="w-4 h-4" />
+                                    Clique aqui para ver a frota detalhada
+                                </button>
+                            )}
+                            
+                            {(view === 'list' || view === 'sold_list') && (
+                                <button onClick={() => setView('dashboard')} className="w-full md:w-auto flex items-center justify-center gap-2 px-4 py-2 bg-slate-200 text-slate-700 rounded-lg hover:bg-slate-300 transition-colors shadow-sm font-medium text-sm">
+                                    <ArrowLeft className="w-4 h-4" />
+                                    Voltar para o Dashboard
+                                </button>
+                            )}
+                        </div>
+                    </div>
+                    
+                    {/* Filtros Ativos */}
+                    {(activeFiltersCount > 0 || searchTerm) && view !== 'sold_list' && (
+                        <div className="mb-6 flex flex-wrap items-center gap-2 bg-white p-3 rounded-lg border border-slate-200 shadow-sm animate-in fade-in slide-in-from-top-2">
+                            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider flex items-center gap-1">
+                                <FilterIcon className="w-3 h-3" /> Filtros:
+                            </span>
+                            {filters.status && <FilterBadge label="Status" value={STATUS_MAP[filters.status] || filters.status} onClear={() => setFilters({...filters, status: ''})} />}
+                            {filters.situacao && <FilterBadge label="Situação" value={filters.situacao} onClear={() => setFilters({...filters, situacao: ''})} />}
+                            {filters.banco && <FilterBadge label="Banco" value={filters.banco} onClear={() => setFilters({...filters, banco: ''})} />}
+                            {filters.category && <FilterBadge label="Categoria" value={filters.category} onClear={() => setFilters({...filters, category: ''})} />}
+                            {filters.ano && <FilterBadge label="Ano" value={filters.ano} onClear={() => setFilters({...filters, ano: ''})} />}
+                            {searchTerm && <FilterBadge label="Busca" value={searchTerm} onClear={() => setSearchTerm('')} />}
+                            
+                            <button onClick={clearFilters} className="ml-auto text-xs text-red-500 hover:text-red-700 underline font-medium">Limpar Todos</button>
+                        </div>
+                    )}
+
+                    {view === 'dashboard' && (
+                        <div className="animate-in fade-in duration-500">
+                            <div className="mb-6">
+                                <Card 
+                                    title="Total de Veículos na Frota" 
+                                    value={metrics.total} 
+                                    icon={Bus} 
+                                    color="blue"
+                                    subtext="Clique para limpar filtros"
+                                    featured={true}
+                                    clickable={true}
+                                    onClick={clearFilters}
+                                />
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 mb-8">
+                                <Card title="Recreio (RTP)" value={metrics.statusCountsByCode['RTP']} icon={Bus} color="blue" subtext="Veículos Recreio" clickable={true} onClick={() => handleChartClick('status', 'RTP')} />
+                                <Card title="Braso Lisboa (ETBL)" value={metrics.statusCountsByCode['ETBL']} icon={Bus} color="amber" subtext="Veículos Braso" clickable={true} onClick={() => handleChartClick('status', 'ETBL')} />
+                                <Card title="Palmas (P)" value={metrics.statusCountsByCode['P']} icon={MapPin} color="purple" subtext="Veículos Palmas" clickable={true} onClick={() => handleChartClick('status', 'P')} />
+                                <Card title="Alugado (A)" value={metrics.statusCountsByCode['A']} icon={CreditCard} color="emerald" subtext="Veículos Alugados" clickable={true} onClick={() => handleChartClick('status', 'A')} />
+                                <Card title="Rio (R)" value={metrics.statusCountsByCode['R']} icon={MapPin} color="red" subtext="Veículos Rio" clickable={true} onClick={() => handleChartClick('status', 'R')} />
+                            </div>
+
+                            <div className="mb-8">
+                                <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-4 ml-1 flex items-center gap-2">
+                                    <Calendar className="w-4 h-4" />
+                                    Frota por Ano de Fabricação
+                                </h3>
+                                {metrics.anosList.length > 0 ? (
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+                                        {metrics.anosList.map((item) => (
+                                            <Card 
+                                                key={item.name}
+                                                title={`Ano ${item.name}`}
+                                                value={item.value}
+                                                icon={Calendar}
+                                                color={item.name === 'N/D' ? 'red' : 'slate'}
+                                                compact={true}
+                                                clickable={true}
+                                                onClick={() => handleYearClick(item.name)}
+                                            />
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <div className="p-4 bg-yellow-50 text-yellow-700 rounded-lg flex items-center gap-2">
+                                        <AlertCircle className="w-5 h-5" />
+                                        Nenhum dado de ano disponível.
+                                    </div>
+                                )}
+                            </div>
+
+                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+                                <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-100">
+                                    <h3 className="text-lg font-semibold mb-4">Distribuição por Situação</h3>
+                                    <p className="text-xs text-slate-400 mb-2">Clique nas fatias para filtrar</p>
+                                    <div className="h-64">
+                                        <ResponsiveContainer width="100%" height="100%">
+                                            <PieChart>
+                                                <Pie data={metrics.situacaoChart} cx="50%" cy="50%" labelLine={false} label={({ name, value, percent }) => `${value} (${(percent * 100).toFixed(0)}%)`} outerRadius={80} fill="#8884d8" dataKey="value" onClick={(data) => handleChartClick('situacao', data.name)}>
+                                                    {metrics.situacaoChart.map((entry, index) => <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />)}
+                                                </Pie>
+                                                <Tooltip />
+                                                <Legend />
+                                            </PieChart>
+                                        </ResponsiveContainer>
+                                    </div>
+                                </div>
+
+                                <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-100">
+                                    <h3 className="text-lg font-semibold mb-4">Distribuição por Banco</h3>
+                                    <p className="text-xs text-slate-400 mb-2">Clique nas barras para filtrar</p>
+                                    <div className="h-64">
+                                        <ResponsiveContainer width="100%" height="100%">
+                                            <BarChart data={metrics.bancoChart} layout="vertical" margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+                                                <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+                                                <XAxis type="number" hide />
+                                                <YAxis dataKey="name" type="category" width={100} tick={{fontSize: 12}} />
+                                                <Tooltip cursor={{fill: 'transparent'}} />
+                                                <Bar dataKey="value" fill="#8884d8" radius={[0, 4, 4, 0]} onClick={(data) => handleChartClick('banco', data.name)}>
+                                                    <LabelList dataKey="value" position="right" style={{ fill: '#64748b', fontSize: '12px' }} />
+                                                    {metrics.bancoChart.map((entry, index) => <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />)}
+                                                </Bar>
+                                            </BarChart>
+                                        </ResponsiveContainer>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+                                <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-100">
+                                    <h3 className="text-lg font-semibold mb-4">Modelos de Chassi</h3>
+                                    <div className="h-64">
+                                        <ResponsiveContainer width="100%" height="100%">
+                                            <BarChart data={metrics.chassiChart} margin={{ top: 20, right: 20, left: 20, bottom: 5 }}>
+                                                <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                                                <XAxis dataKey="name" tick={{fontSize: 10}} interval={0} />
+                                                <YAxis hide />
+                                                <Tooltip cursor={{fill: '#f4f4f5'}} />
+                                                <Bar dataKey="value" fill="#00C49F" radius={[4, 4, 0, 0]}>
+                                                    <LabelList dataKey="value" position="top" style={{ fill: '#64748b', fontSize: '12px' }} />
+                                                </Bar>
+                                            </BarChart>
+                                        </ResponsiveContainer>
+                                    </div>
+                                </div>
+
+                                <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-100">
+                                    <h3 className="text-lg font-semibold mb-4">Fornecedores / Origem</h3>
+                                    <div className="h-96">
+                                        <ResponsiveContainer width="100%" height="100%">
+                                            <BarChart data={metrics.fornecedoraChart} layout="vertical" margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+                                                <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+                                                <XAxis type="number" hide />
+                                                <YAxis dataKey="name" type="category" width={140} tick={{fontSize: 10}} />
+                                                <Tooltip />
+                                                <Bar dataKey="value" fill="#FF8042" radius={[0, 4, 4, 0]}>
+                                                    <LabelList dataKey="value" position="right" style={{ fill: '#64748b', fontSize: '12px' }} />
+                                                </Bar>
+                                            </BarChart>
+                                        </ResponsiveContainer>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                    
+                    {view === 'list' && (
+                        <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-500">
+                            <div className="p-5 border-b border-slate-100">
+                                <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4">
+                                    <h3 className="text-lg font-semibold text-slate-800">Detalhamento da Frota</h3>
+                                    
+                                    <div className="flex flex-col md:flex-row flex-wrap items-center gap-3">
+                                        <div className="relative w-full md:w-auto md:flex-1 min-w-[200px]">
+                                            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 w-4 h-4" />
+                                            <input type="text" placeholder="Buscar..." className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+                                        </div>
+
+                                        <div className="flex items-center gap-2 w-full md:w-auto overflow-x-auto pb-1 md:pb-0">
+                                            <select className="bg-slate-50 border border-slate-200 text-slate-700 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2 min-w-[120px]" value={filters.status} onChange={(e) => setFilters({...filters, status: e.target.value})}>
+                                                <option value="">Status</option>
+                                                {uniqueValues.status.map(v => <option key={v} value={v}>{STATUS_MAP[v] || v}</option>)}
+                                            </select>
+
+                                            <select className="bg-slate-50 border border-slate-200 text-slate-700 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2 min-w-[120px]" value={filters.situacao} onChange={(e) => setFilters({...filters, situacao: e.target.value})}>
+                                                <option value="">Situação</option>
+                                                {uniqueValues.situacao.map(v => <option key={v} value={v}>{v}</option>)}
+                                            </select>
+
+                                            <select className="bg-slate-50 border border-slate-200 text-slate-700 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2 min-w-[120px]" value={filters.banco} onChange={(e) => setFilters({...filters, banco: e.target.value})}>
+                                                <option value="">Banco</option>
+                                                {uniqueValues.banco.map(v => <option key={v} value={v}>{v}</option>)}
+                                            </select>
+                                        </div>
+
+                                        <button onClick={() => setView('sold_list')} className="w-full md:w-auto flex items-center justify-center gap-2 px-4 py-2 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-lg hover:bg-emerald-100 transition-colors text-sm font-medium whitespace-nowrap">
+                                            <DollarSign className="w-4 h-4" />
+                                            Vendidos
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div className="overflow-x-auto">
+                                <table className="w-full text-left text-sm text-slate-600">
+                                    <thead className="bg-slate-50 text-slate-700 font-semibold uppercase text-xs">
+                                        <tr>
+                                            <SortableHeader label="Prefixo" sortKey={keys.PREFIXO} />
+                                            <SortableHeader label="Novo Prefixo" sortKey={keys.NOVO_PREFIXO} />
+                                            <SortableHeader label="Placa" sortKey={keys.PLACA} />
+                                            <SortableHeader label="Renavam" sortKey={keys.RENAVAM} />
+                                            <SortableHeader label="Ano" sortKey={keys.ANO} />
+                                            <SortableHeader label="Status" sortKey={keys.STATUS} />
+                                            <SortableHeader label="Situação" sortKey={keys.SITUACAO} />
+                                            <SortableHeader label="Banco" sortKey={keys.BANCO} />
+                                            <SortableHeader label="Modelo" sortKey={keys.MODELO} />
+                                            <th className="px-6 py-4">Ações</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-slate-100">
+                                        {processedData.length > 0 ? (
+                                            processedData.map((bus, idx) => {
+                                                const cat = getStatusCategory(bus[keys.SITUACAO]);
+                                                return (
+                                                    <tr key={idx} className="hover:bg-slate-50 transition-colors">
+                                                        <td className="px-6 py-4 font-medium text-slate-900">{bus[keys.PREFIXO]}</td>
+                                                        <td className="px-6 py-4 text-blue-600 font-bold">
+                                                            {bus[keys.NOVO_PREFIXO] ? (
+                                                                <span className="flex items-center gap-1">
+                                                                    {bus[keys.NOVO_PREFIXO]}
+                                                                    <TypeIcon className="w-3 h-3 text-blue-400" />
+                                                                </span>
+                                                            ) : <span className="text-slate-300"></span>}
+                                                        </td>
+                                                        <td className="px-6 py-4">{bus[keys.PLACA]}</td>
+                                                        <td className="px-6 py-4 font-mono text-xs">{bus[keys.RENAVAM]}</td>
+                                                        <td className="px-6 py-4 font-medium text-slate-700">{bus[keys.ANO]}</td>
+                                                        <td className="px-6 py-4">
+                                                            <span className={`px-2 py-1 rounded-full text-xs font-medium ${bus[keys.STATUS] === 'RTP' ? 'bg-blue-100 text-blue-700' : bus[keys.STATUS] === 'ETBL' ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-700'}`}>
+                                                                {STATUS_MAP[bus[keys.STATUS]] || bus[keys.STATUS]}
+                                                            </span>
+                                                        </td>
+                                                        <td className="px-6 py-4">
+                                                            <span className={`flex items-center gap-2 ${cat === 'OPERACAO' ? 'text-emerald-600 font-medium' : cat === 'MANUTENCAO' ? 'text-amber-600 font-medium' : cat === 'REFORMA' ? 'text-red-600 font-medium' : cat === 'VENDIDO' ? 'text-purple-600 font-medium' : 'text-slate-600'}`}>
+                                                                {cat === 'REFORMA' && <Hammer className="w-3 h-3" />}
+                                                                {cat === 'MANUTENCAO' && <Wrench className="w-3 h-3" />}
+                                                                {cat === 'OPERACAO' && <Activity className="w-3 h-3" />}
+                                                                {cat === 'VENDIDO' && <DollarSign className="w-3 h-3" />}
+                                                                {bus[keys.SITUACAO]}
+                                                            </span>
+                                                        </td>
+                                                        <td className="px-6 py-4">{bus[keys.BANCO]}</td>
+                                                        <td className="px-6 py-4">{bus[keys.MODELO]} ({bus[keys.CHASSI]})</td>
+                                                        <td className="px-6 py-4 flex gap-2">
+                                                            <button onClick={() => handleEditClick(bus)} className="text-slate-400 hover:text-blue-600 transition-colors p-1 rounded-full hover:bg-blue-50" title="Editar"><Edit className="w-4 h-4" /></button>
+                                                            <button onClick={() => handleSellClick(bus)} className="text-slate-400 hover:text-emerald-600 transition-colors p-1 rounded-full hover:bg-emerald-50" title="Vender Veículo"><DollarSign className="w-4 h-4" /></button>
+                                                        </td>
+                                                    </tr>
+                                                );
+                                            })
+                                        ) : (
+                                            <tr><td colSpan="10" className="px-6 py-8 text-center text-slate-400">Nenhum veículo encontrado.</td></tr>
+                                        )}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    )}
+
+                    {view === 'sold_list' && (
+                        <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden animate-in fade-in slide-in-from-right duration-500">
+                             <div className="p-6 border-b border-slate-100">
+                                <div className="flex justify-between items-center mb-4">
+                                    <div className="flex items-center gap-3">
+                                        <div className="bg-emerald-100 p-2 rounded-lg">
+                                            <ShoppingCart className="w-6 h-6 text-emerald-700" />
+                                        </div>
+                                        <div>
+                                            <h3 className="text-xl font-bold text-slate-800">Planilha de Veículos Vendidos</h3>
+                                            <p className="text-sm text-slate-500">Histórico de vendas realizadas</p>
+                                        </div>
+                                    </div>
+                                    <div className="bg-emerald-50 px-4 py-2 rounded-lg border border-emerald-100 text-right">
+                                        <p className="text-xs text-emerald-600 font-semibold uppercase">Total em Vendas</p>
+                                        <p className="text-2xl font-bold text-emerald-800">
+                                            {formatCurrency(soldData.reduce((acc, curr) => acc + (curr[keys.PRICE] || 0), 0))}
+                                        </p>
+                                    </div>
+                                </div>
+                             </div>
+
+                             <div className="overflow-x-auto">
+                                <table className="w-full text-left text-sm text-slate-600">
+                                    <thead className="bg-slate-50 text-slate-700 font-semibold uppercase text-xs">
+                                        <tr>
+                                            <th className="px-6 py-4">Data Venda</th>
+                                            <th className="px-6 py-4">Prefixo</th>
+                                            <th className="px-6 py-4">Placa</th>
+                                            <th className="px-6 py-4">Ano</th>
+                                            <th className="px-6 py-4">Comprador</th>
+                                            <th className="px-6 py-4 text-right">Valor Venda</th>
+                                            <th className="px-6 py-4 text-center">Ações</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-slate-100">
+                                        {soldData.length > 0 ? (
+                                            soldData.map((bus, idx) => (
+                                                <tr key={idx} className="hover:bg-slate-50 transition-colors">
+                                                    <td className="px-6 py-4 text-slate-500">{bus[keys.SALE_DATE] || '-'}</td>
+                                                    <td className="px-6 py-4 font-medium text-slate-900">{bus[keys.PREFIXO]}</td>
+                                                    <td className="px-6 py-4">{bus[keys.PLACA]}</td>
+                                                    <td className="px-6 py-4">{bus[keys.ANO]}</td>
+                                                    <td className="px-6 py-4 font-medium text-emerald-700">{bus[keys.BUYER]}</td>
+                                                    <td className="px-6 py-4 text-right font-bold text-slate-800">{formatCurrency(bus[keys.PRICE])}</td>
+                                                    <td className="px-6 py-4 text-center">
+                                                        <button onClick={() => handleCancelSale(bus)} className="text-red-400 hover:text-red-600 transition-colors p-1 rounded-full hover:bg-red-50 flex items-center justify-center gap-1 mx-auto text-xs font-medium" title="Cancelar Venda">
+                                                            <RotateCcw className="w-4 h-4" /> Cancelar
+                                                        </button>
+                                                    </td>
+                                                </tr>
+                                            ))
+                                        ) : (
+                                            <tr>
+                                                <td colSpan="7" className="px-6 py-12 text-center text-slate-400">
+                                                    <ShoppingCart className="w-12 h-12 mx-auto mb-3 text-slate-200" />
+                                                    <p>Nenhum veículo vendido registrado ainda.</p>
+                                                </td>
+                                            </tr>
+                                        )}
+                                    </tbody>
+                                </table>
+                             </div>
+                        </div>
+                    )}
+                    
+                    {/* Modal de Edição */}
+                    {editingVehicle && (
+                        <EditModal 
+                            bus={editingVehicle}
+                            currentSituacao={editingVehicle[keys.SITUACAO]}
+                            currentStatus={editingVehicle[keys.STATUS]}
+                            currentNovoPrefixo={editingVehicle[keys.NOVO_PREFIXO]} 
+                            onClose={() => setEditingVehicle(null)}
+                            onSave={handleSaveEdit}
+                            situacaoOptions={uniqueValues.situacao}
+                            statusOptions={uniqueValues.status}
+                        />
+                    )}
+
+                    {/* Modal de Venda */}
+                    {sellingVehicle && (
+                        <SalesModal 
+                            bus={sellingVehicle}
+                            onClose={() => setSellingVehicle(null)}
+                            onConfirm={handleConfirmSale}
+                        />
+                    )}
+
+                    <div className="mt-8 flex flex-col items-center justify-center gap-2">
+                        <div className="text-xs text-slate-400">
+                            Dashboard de Frota • Versão Estática v1.0
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
