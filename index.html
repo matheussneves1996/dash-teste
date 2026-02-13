@@ -3,8 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gestão de Frota - Dashboard Seguro</title>
-    <meta name="description" content="Dashboard de gerenciamento de frota veicular com login seguro e gráficos responsivos.">
+    <title>Gestão de Frota - Dashboard Multi-Select</title>
+    <meta name="description" content="Dashboard de gerenciamento de frota veicular com login seguro e filtros múltiplos.">
     
     <!-- Favicon (Ícone de Ônibus) -->
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🚌</text></svg>">
@@ -35,6 +35,11 @@
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
         .modal-backdrop { animation: fadeIn 0.2s ease-out; }
         .recharts-sector, .recharts-rectangle { cursor: pointer; }
+        /* Custom Scrollbar para Dropdowns */
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #f1f5f9; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
     </style>
 </head>
 <body>
@@ -110,6 +115,8 @@
         const ArrowRight = (props) => <IconBase {...props}><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></IconBase>;
         const LogOut = (props) => <IconBase {...props}><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></IconBase>;
         const Lock = (props) => <IconBase {...props}><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></IconBase>;
+        const ChevronDown = (props) => <IconBase {...props}><path d="m6 9 6 6 6-6"/></IconBase>;
+        const Check = (props) => <IconBase {...props}><polyline points="20 6 9 17 4 12"/></IconBase>;
 
         // --- DADOS E VARIÁVEIS ---
         
@@ -156,6 +163,63 @@
         };
 
         // --- COMPONENTES ---
+        const MultiSelectDropdown = ({ label, options, selectedValues, onChange, mapLabel }) => {
+            const [isOpen, setIsOpen] = useState(false);
+            const dropdownRef = React.useRef(null);
+
+            useEffect(() => {
+                const handleClickOutside = (event) => {
+                    if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+                        setIsOpen(false);
+                    }
+                };
+                document.addEventListener("mousedown", handleClickOutside);
+                return () => document.removeEventListener("mousedown", handleClickOutside);
+            }, []);
+
+            return (
+                <div className="relative" ref={dropdownRef}>
+                    <button 
+                        onClick={() => setIsOpen(!isOpen)}
+                        className={`flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg border transition-all ${selectedValues.length > 0 ? 'bg-blue-50 border-blue-200 text-blue-700 shadow-sm' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'}`}
+                    >
+                        <FilterIcon className={`w-3.5 h-3.5 ${selectedValues.length > 0 ? 'text-blue-500' : 'text-slate-400'}`} />
+                        <span>{label}</span>
+                        {selectedValues.length > 0 && (
+                            <span className="flex items-center justify-center bg-blue-600 text-white text-[10px] font-bold h-5 w-5 rounded-full">{selectedValues.length}</span>
+                        )}
+                        <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''} ${selectedValues.length > 0 ? 'text-blue-400' : 'text-slate-400'}`} />
+                    </button>
+
+                    {isOpen && (
+                        <div className="absolute top-full left-0 mt-2 w-64 bg-white rounded-xl shadow-xl border border-slate-100 z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+                            <div className="px-3 py-2 bg-slate-50 border-b border-slate-100 text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                                Selecione {label}
+                            </div>
+                            <div className="p-1 max-h-64 overflow-y-auto custom-scrollbar">
+                                {options.map(opt => {
+                                    const isSelected = selectedValues.includes(opt);
+                                    const labelText = mapLabel ? mapLabel(opt) : opt;
+                                    return (
+                                        <div 
+                                            key={opt} 
+                                            onClick={() => onChange(opt)}
+                                            className={`flex items-center gap-3 px-3 py-2.5 rounded-lg cursor-pointer text-sm transition-all border border-transparent ${isSelected ? 'bg-blue-50 text-blue-700 border-blue-100' : 'text-slate-600 hover:bg-slate-50 hover:border-slate-100'}`}
+                                        >
+                                            <div className={`w-5 h-5 rounded flex items-center justify-center transition-all shadow-sm border ${isSelected ? 'bg-blue-600 border-blue-600' : 'bg-white border-slate-300'}`}>
+                                                {isSelected && <Check className="w-3.5 h-3.5 text-white" strokeWidth={3} />}
+                                            </div>
+                                            <span className="truncate font-medium">{labelText}</span>
+                                        </div>
+                                    );
+                                })}
+                                {options.length === 0 && <div className="p-3 text-center text-sm text-slate-400">Nenhuma opção disponível</div>}
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        };
 
         const LoginScreen = ({ onLogin, error, isLoading }) => {
             const [email, setEmail] = useState('');
@@ -358,7 +422,8 @@
             const [loginError, setLoginError] = useState('');
 
             const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' });
-            const [filters, setFilters] = useState({ status: '', situacao: '', banco: '', category: '', ano: '' });
+            // ALTERAÇÃO 1: status e situacao agora são Arrays para múltipla seleção
+            const [filters, setFilters] = useState({ status: [], situacao: [], banco: '', category: '', ano: '' });
             const [editingVehicle, setEditingVehicle] = useState(null);
             const [sellingVehicle, setSellingVehicle] = useState(null);
 
@@ -487,12 +552,30 @@
                 }
             };
 
-            // Filtragem
+            // Filtragem e Interatividade
             const handleEditClick = (vehicle) => setEditingVehicle(vehicle);
             const handleSellClick = (vehicle) => setSellingVehicle(vehicle);
-            const handleChartClick = (type, value) => setFilters(prev => ({ ...prev, [type]: prev[type] === value ? '' : value }));
+            
+            // ALTERAÇÃO 2: Toggle para Múltipla Seleção (Status e Situação)
+            const handleChartClick = (type, value) => {
+                if (type === 'status' || type === 'situacao') {
+                    setFilters(prev => {
+                        const list = prev[type];
+                        // Se já estiver na lista, remove. Se não, adiciona.
+                        const newList = list.includes(value)
+                            ? list.filter(item => item !== value)
+                            : [...list, value];
+                        
+                        return { ...prev, [type]: newList };
+                    });
+                } else {
+                    // Para outros filtros (banco, ano), mantemos a lógica de toggle único
+                    setFilters(prev => ({ ...prev, [type]: prev[type] === value ? '' : value }));
+                }
+            };
+
             const handleYearClick = (year) => setFilters(prev => ({ ...prev, ano: prev.ano === year ? '' : year }));
-            const clearFilters = () => { setFilters({ status: '', situacao: '', banco: '', category: '', ano: '' }); setSearchTerm(''); };
+            const clearFilters = () => { setFilters({ status: [], situacao: [], banco: '', category: '', ano: '' }); setSearchTerm(''); };
             const requestSort = (key) => {
                 let direction = 'asc';
                 if (sortConfig.key === key && sortConfig.direction === 'asc') direction = 'desc';
@@ -501,22 +584,31 @@
 
             const filteredData = useMemo(() => {
                 let data = fleetData.filter(item => !item[keys.IS_SOLD]);
-                if (filters.status) data = data.filter(item => item[keys.STATUS] === filters.status);
-                if (filters.situacao) {
+                
+                // ALTERAÇÃO 3: Filtro com includes (Status)
+                if (filters.status.length > 0) {
+                    data = data.filter(item => filters.status.includes(item[keys.STATUS]));
+                }
+
+                // ALTERAÇÃO 3: Filtro com includes (Situação)
+                if (filters.situacao.length > 0) {
                     data = data.filter(item => {
                         const rawSit = item[keys.SITUACAO] || '';
-                        if (filters.situacao === 'ALUGADOS') return normalizeText(rawSit).startsWith('A.');
-                        return rawSit === filters.situacao;
+                        let sitToCheck = rawSit;
+                        if (normalizeText(rawSit).startsWith('A.')) sitToCheck = 'ALUGADOS'; // Mantém compatibilidade com a lógica anterior
+                        // Verifica se o valor original ou o valor tratado (ALUGADOS) está na lista de filtros
+                        return filters.situacao.includes(sitToCheck) || filters.situacao.includes(rawSit);
                     });
                 }
+
                 if (filters.banco) data = data.filter(item => item[keys.BANCO] === filters.banco);
                 if (filters.category) data = data.filter(item => getStatusCategory(item[keys.SITUACAO]) === filters.category);
                 if (filters.ano) {
                     data = data.filter(item => {
-                         let val = item[keys.ANO];
-                         if (val) val = val.toString().trim();
-                         if (!val || val === '') val = 'N/D';
-                         return val === filters.ano;
+                          let val = item[keys.ANO];
+                          if (val) val = val.toString().trim();
+                          if (!val || val === '') val = 'N/D';
+                          return val === filters.ano;
                     });
                 }
                 if (searchTerm) {
@@ -572,7 +664,13 @@
 
             const uniqueValues = useMemo(() => {
                 const getUnique = (key) => [...new Set(fleetData.map(item => item[key]).filter(Boolean))].sort();
-                return { status: getUnique(keys.STATUS), situacao: getUnique(keys.SITUACAO), banco: getUnique(keys.BANCO) };
+                // Inclui ALUGADOS manualmente se houver situações que comecem com A.
+                const situacoes = [...new Set(fleetData.map(item => {
+                    const s = item[keys.SITUACAO];
+                    return normalizeText(s).startsWith('A.') ? 'ALUGADOS' : s;
+                }).filter(Boolean))].sort();
+
+                return { status: getUnique(keys.STATUS), situacao: situacoes, banco: getUnique(keys.BANCO) };
             }, [fleetData, keys]);
 
             const processedData = useMemo(() => {
@@ -593,7 +691,9 @@
                 </th>
             );
             
-            const activeFiltersCount = Object.values(filters).filter(Boolean).length;
+            // Calculamos quantos filtros estão ativos checando o tamanho dos arrays
+            const activeFiltersCount = filters.status.length + filters.situacao.length + (filters.banco ? 1 : 0) + (filters.category ? 1 : 0) + (filters.ano ? 1 : 0) + (searchTerm ? 1 : 0);
+            
             const FilterBadge = ({ label, value, onClear }) => (<span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800 border border-blue-200">{label}: {value}<button onClick={onClear} className="hover:text-blue-900"><XIcon className="w-3 h-3" /></button></span>);
 
             // === RENDERIZAÇÃO ===
@@ -637,8 +737,11 @@
                     {(activeFiltersCount > 0 || searchTerm) && view !== 'sold_list' && (
                         <div className="mb-6 flex flex-wrap items-center gap-2 bg-white p-3 rounded-lg border border-slate-200 shadow-sm animate-in fade-in slide-in-from-top-2">
                             <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider flex items-center gap-1"><FilterIcon className="w-3 h-3" /> Filtros:</span>
-                            {filters.status && <FilterBadge label="Status" value={STATUS_MAP[filters.status] || filters.status} onClear={() => setFilters({...filters, status: ''})} />}
-                            {filters.situacao && <FilterBadge label="Situação" value={filters.situacao} onClear={() => setFilters({...filters, situacao: ''})} />}
+                            
+                            {/* ALTERAÇÃO 4: Renderizar múltiplos badges */}
+                            {filters.status.map(s => <FilterBadge key={s} label="Status" value={STATUS_MAP[s] || s} onClear={() => handleChartClick('status', s)} />)}
+                            {filters.situacao.map(s => <FilterBadge key={s} label="Situação" value={s} onClear={() => handleChartClick('situacao', s)} />)}
+                            
                             {filters.banco && <FilterBadge label="Banco" value={filters.banco} onClear={() => setFilters({...filters, banco: ''})} />}
                             {filters.category && <FilterBadge label="Categoria" value={filters.category} onClear={() => setFilters({...filters, category: ''})} />}
                             {filters.ano && <FilterBadge label="Ano" value={filters.ano} onClear={() => setFilters({...filters, ano: ''})} />}
@@ -749,21 +852,34 @@
                     )}
                     
                     {view === 'list' && (
-                        <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-500">
-                            <div className="p-5 border-b border-slate-100">
+                        <div className="bg-white rounded-xl shadow-sm border border-slate-100 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                            <div className="p-5 border-b border-slate-100 rounded-t-xl">
                                 <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4">
                                     <h3 className="text-lg font-semibold text-slate-800">Detalhamento da Frota</h3>
                                     <div className="flex flex-col md:flex-row flex-wrap items-center gap-3">
                                         <div className="relative w-full md:w-auto md:flex-1 min-w-[200px]"><Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 w-4 h-4" /><input type="text" placeholder="Buscar..." className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} /></div>
-                                        <div className="flex items-center gap-2 w-full md:w-auto overflow-x-auto pb-1 md:pb-0">
-                                            <select className="bg-slate-50 border border-slate-200 text-slate-700 text-sm rounded-lg block p-2 min-w-[120px]" value={filters.status} onChange={(e) => setFilters({...filters, status: e.target.value})}><option value="">Status</option>{uniqueValues.status.map(v => <option key={v} value={v}>{STATUS_MAP[v] || v}</option>)}</select>
-                                            <select className="bg-slate-50 border border-slate-200 text-slate-700 text-sm rounded-lg block p-2 min-w-[120px]" value={filters.situacao} onChange={(e) => setFilters({...filters, situacao: e.target.value})}><option value="">Situação</option>{uniqueValues.situacao.map(v => <option key={v} value={v}>{v}</option>)}</select>
+                                        <div className="flex items-center gap-2 w-full md:w-auto relative z-20">
+                                            {/* ALTERAÇÃO 5: Novo Componente MultiSelectDropdown */}
+                                            <MultiSelectDropdown 
+                                                label="Status" 
+                                                options={uniqueValues.status} 
+                                                selectedValues={filters.status} 
+                                                onChange={(val) => handleChartClick('status', val)}
+                                                mapLabel={(val) => STATUS_MAP[val] || val}
+                                            />
+
+                                            <MultiSelectDropdown 
+                                                label="Situação" 
+                                                options={uniqueValues.situacao} 
+                                                selectedValues={filters.situacao} 
+                                                onChange={(val) => handleChartClick('situacao', val)}
+                                            />
                                         </div>
                                         <button onClick={() => setView('sold_list')} className="w-full md:w-auto flex items-center justify-center gap-2 px-4 py-2 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-lg hover:bg-emerald-100 transition-colors text-sm font-medium whitespace-nowrap"><DollarSign className="w-4 h-4" /> Vendidos</button>
                                     </div>
                                 </div>
                             </div>
-                            <div className="overflow-x-auto">
+                            <div className="overflow-x-auto rounded-b-xl">
                                 <table className="w-full text-left text-sm text-slate-600">
                                     <thead className="bg-slate-50 text-slate-700 font-semibold uppercase text-xs">
                                         <tr><SortableHeader label="Prefixo" sortKey={keys.PREFIXO} /><SortableHeader label="Novo Prefixo" sortKey={keys.NOVO_PREFIXO} /><SortableHeader label="Placa" sortKey={keys.PLACA} /><SortableHeader label="Renavam" sortKey={keys.RENAVAM} /><SortableHeader label="Ano" sortKey={keys.ANO} /><SortableHeader label="Status" sortKey={keys.STATUS} /><SortableHeader label="Situação" sortKey={keys.SITUACAO} /><SortableHeader label="Banco" sortKey={keys.BANCO} /><SortableHeader label="Modelo" sortKey={keys.MODELO} /><th className="px-6 py-4">Ações</th></tr>
